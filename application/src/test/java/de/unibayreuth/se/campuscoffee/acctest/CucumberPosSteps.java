@@ -4,6 +4,7 @@ import de.unibayreuth.se.campuscoffee.domain.ports.PosService;
 import de.unibayreuth.se.campuscoffee.api.dtos.PosDto;
 import de.unibayreuth.se.campuscoffee.domain.CampusType;
 import de.unibayreuth.se.campuscoffee.domain.PosType;
+import de.unibayreuth.se.campuscoffee.domain.exceptions.PosNotFoundException;
 import io.cucumber.java.*;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
@@ -21,7 +22,6 @@ import java.util.List;
 import java.util.Map;
 
 import static de.unibayreuth.se.campuscoffee.TestUtil.*;
-import static de.unibayreuth.se.campuscoffee.TestUtil.configurePostgresContainers;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -104,5 +104,60 @@ public class CucumberPosSteps {
         assertThat(retrievedPosList)
                 .usingRecursiveFieldByFieldElementComparatorIgnoringFields("id", "createdAt", "updatedAt")
                 .containsExactlyInAnyOrderElementsOf(createdPosList);
+    }
+
+    // Given -----------------------------------------------------------------------
+
+    @Given("I insert three POS with the following elements")
+    public void iInsertThreePosWithTheFollowingElements(List<PosDto> posList) {
+        assertThat(posList).hasSize(3);
+        createdPosList = createPos(posList);
+        assertThat(createdPosList).size().isEqualTo(3);
+    }
+    
+
+    // When -----------------------------------------------------------------------
+
+    @When("I modify the decription of one of them based on its name")
+    public void modifyPosDescriptionByName(List<PosDto> posList) {
+        assertThat(posList).hasSize(1);
+        PosDto posToModify = posList.get(0);
+        List<PosDto> retrievedPosList = retrievePos();
+        PosDto existingPos = retrievedPosList.stream()
+                .filter(pos -> pos.getName().equals(posToModify.getName()))
+                .findFirst()
+                .orElseThrow(() -> new PosNotFoundException("POS with name " + posToModify.getName() + " not found"));
+
+        // Neues Objekt mit geänderter Beschreibung bauen
+        PosDto updatedPos = PosDto.builder()
+                .id(existingPos.getId())
+                .name(existingPos.getName())
+                .description(posToModify.getDescription())
+                .type(existingPos.getType())
+                .campus(existingPos.getCampus())
+                .street(existingPos.getStreet())
+                .houseNumber(existingPos.getHouseNumber())
+                .postalCode(existingPos.getPostalCode())
+                .city(existingPos.getCity())
+                .build();
+
+        // updatePos erwartet eine Liste
+        updatePos(List.of(updatedPos));
+    }
+
+    // Then -----------------------------------------------------------------------
+
+    @Then("the description should be updated")
+    public void theDescriptionShouldBeUpdated(List<PosDto> posList) {
+        assertThat(posList).hasSize(1);
+        PosDto expected = posList.get(0);
+
+        List<PosDto> retrievedPosList = retrievePos();
+        PosDto actual = retrievedPosList.stream()
+                .filter(pos -> pos.getName().equals(expected.getName()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("POS with name " + expected.getName() + " not found"));
+
+        assertThat(actual.getDescription()).isEqualTo(expected.getDescription());
     }
 }
